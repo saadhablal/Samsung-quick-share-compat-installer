@@ -14,7 +14,7 @@ try {
 
     if (-not $DryRun -and -not (Test-IsAdministrator)) {
         Write-Status 'Administrator rights are required. Requesting elevation...' -Level Warning
-        Restart-ElevatedScript -ScriptPath $PSCommandPath -OriginalArguments $args
+        Restart-ElevatedScript -ScriptPath $PSCommandPath -OriginalArguments (Get-ReinvocationArgumentList -BoundParameters $PSBoundParameters)
     }
 
     $state = Get-StatePaths
@@ -50,4 +50,3 @@ catch {
 finally {
     Pause-IfRequested -PauseWhenFinished $PauseWhenFinished.IsPresent
 }
-

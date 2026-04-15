@@ -59,6 +59,40 @@ function Restart-ElevatedScript {
     exit $process.ExitCode
 }
 
+function Get-ReinvocationArgumentList {
+    param([hashtable]$BoundParameters)
+
+    $argumentList = @()
+    if (-not $BoundParameters) {
+        return $argumentList
+    }
+
+    foreach ($key in $BoundParameters.Keys) {
+        $value = $BoundParameters[$key]
+        if ($value -is [System.Management.Automation.SwitchParameter]) {
+            if ($value.IsPresent) {
+                $argumentList += "-$key"
+            }
+            continue
+        }
+
+        if ($null -eq $value) {
+            continue
+        }
+
+        if ($value -is [array]) {
+            $argumentList += "-$key"
+            $argumentList += @($value | ForEach-Object { [string]$_ })
+            continue
+        }
+
+        $argumentList += "-$key"
+        $argumentList += [string]$value
+    }
+
+    return $argumentList
+}
+
 function Get-StatePaths {
     $root = Join-Path $env:ProgramData 'SamsungQuickShareCompatInstaller'
     return @{
@@ -343,7 +377,7 @@ foreach (`$entry in `$backup.Entries) {
 }
 
 try {
-    schtasks.exe /Delete /TN "$taskName" /F | Out-Null
+    schtasks.exe /Delete /TN "$taskName" /F 2>`$null | Out-Null
 }
 catch {
 }
@@ -387,7 +421,10 @@ function Install-StartupTask {
 
 function Remove-StartupTask {
     $taskName = Get-StartupTaskName
-    & schtasks.exe /Delete /TN $taskName /F | Out-Null
+    & schtasks.exe /Query /TN $taskName 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        & schtasks.exe /Delete /TN $taskName /F 2>$null | Out-Null
+    }
 }
 
 function Get-QuickSharePackage {
@@ -403,6 +440,12 @@ function Ensure-WingetAvailable {
 }
 
 function Install-QuickShareFromStore {
+    param(
+        [int]$InstallAttempts = 2,
+        [int]$PollAttempts = 36,
+        [int]$PollIntervalSeconds = 5
+    )
+
     $existing = Get-QuickSharePackage
     if ($existing) {
         Write-Status "Quick Share is already installed." -Level Success
@@ -410,28 +453,31 @@ function Install-QuickShareFromStore {
     }
 
     Ensure-WingetAvailable
-    Write-Status "Installing Quick Share from the Microsoft Store..." -Level Info
 
-    & winget.exe install --id (Get-QuickShareStoreId) --source msstore --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
-    if ($LASTEXITCODE -ne 0) {
-        throw "winget could not install Quick Share."
-    }
+    for ($installAttempt = 1; $installAttempt -le $InstallAttempts; $installAttempt++) {
+        Write-Status "Installing Quick Share from the Microsoft Store (attempt $installAttempt of $InstallAttempts)..." -Level Info
 
-    $package = $null
-    for ($attempt = 0; $attempt -lt 24; $attempt++) {
-        Start-Sleep -Seconds 5
-        $package = Get-QuickSharePackage
-        if ($package) {
-            break
+        & winget.exe install --id (Get-QuickShareStoreId) --source msstore --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
+        if ($LASTEXITCODE -ne 0) {
+            throw "winget could not install Quick Share."
+        }
+
+        $package = $null
+        for ($pollAttempt = 0; $pollAttempt -lt $PollAttempts; $pollAttempt++) {
+            Start-Sleep -Seconds $PollIntervalSeconds
+            $package = Get-QuickSharePackage
+            if ($package) {
+                Write-Status "Quick Share installed successfully." -Level Success
+                return $package
+            }
+        }
+
+        if ($installAttempt -lt $InstallAttempts) {
+            Write-Status 'Quick Share did not appear yet. Retrying the Store install once more...' -Level Warning
         }
     }
 
-    if (-not $package) {
-        throw "Quick Share did not appear after installation."
-    }
-
-    Write-Status "Quick Share installed successfully." -Level Success
-    return $package
+    throw "Quick Share did not appear after installation."
 }
 
 function Remove-QuickShareApp {
@@ -505,4 +551,3 @@ function Show-WirelessCompatibility {
         Write-Status 'No Intel Bluetooth adapter was detected. Quick Share may not work on this machine.' -Level Warning
     }
 }
-

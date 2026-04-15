@@ -73,6 +73,35 @@ powershell -ExecutionPolicy Bypass -File .\src\Uninstall-QuickShareCompat.ps1 -R
 powershell -ExecutionPolicy Bypass -File .\build-release.ps1 -Version 0.1.0
 ```
 
+## Run Regression Tests
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\Run-Regression.ps1
+```
+
+That covers:
+
+- PowerShell syntax parsing
+- Pester unit tests
+- installer dry-run
+- uninstaller dry-run
+- release zip creation
+
+## Optional Live App Test
+
+This is not part of CI because it changes the local Quick Share app installation.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\Run-LiveAppLifecycle.ps1 -ReinstallQuickShare
+```
+
+That script:
+
+- removes Quick Share
+- reinstalls it from the Microsoft Store through the repo helper
+- verifies the package is present again
+- launches the app
+
 ## Notes
 
 - if Quick Share is already installed, the installer keeps it and only applies the compatibility setup
@@ -82,4 +111,3 @@ powershell -ExecutionPolicy Bypass -File .\build-release.ps1 -Version 0.1.0
 ## Disclaimer
 
 Use this at your own risk. This project modifies system registry values that Samsung software uses for compatibility checks.
-
