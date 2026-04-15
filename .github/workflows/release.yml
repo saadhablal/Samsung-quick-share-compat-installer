@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-release:
     runs-on: windows-latest
@@ -41,4 +44,3 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
-
