@@ -5,6 +5,7 @@ Unofficial community installer for getting Samsung Quick Share running on non-Sa
 This project is designed for fresh machines too:
 
 - installs Samsung Quick Share from the Microsoft Store if it is missing
+- installs Samsung account from the Microsoft Store if it is missing
 - applies the Samsung Galaxy Book compatibility registry profile
 - backs up the original registry values before changing anything
 - installs a startup task so the compatibility fix survives reboots
@@ -32,6 +33,7 @@ The default profile used here is:
 - Internet connection
 - `winget` available on the system
 - Intel Wi-Fi and Intel Bluetooth strongly recommended for the best results
+- Samsung account sign-in is still required inside the app for share-to-contacts and same-account flows
 
 ## Quick Start
 
@@ -39,7 +41,9 @@ The default profile used here is:
 2. Extract it anywhere.
 3. Double-click `install.bat`.
 4. Approve the Administrator prompt.
-5. Let the installer finish and launch Quick Share.
+5. Let the installer install Quick Share and Samsung account if they are missing.
+6. Sign in to Samsung account inside Quick Share if you want share-to-contacts or same-account transfers.
+7. Let the installer finish and launch Quick Share.
 
 ## Uninstall
 
@@ -70,7 +74,7 @@ powershell -ExecutionPolicy Bypass -File .\src\Uninstall-QuickShareCompat.ps1 -R
 ## Build A Release Zip
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\build-release.ps1 -Version 0.1.0
+powershell -ExecutionPolicy Bypass -File .\build-release.ps1 -Version 0.1.1
 ```
 
 ## Run Regression Tests
@@ -97,6 +101,7 @@ powershell -ExecutionPolicy Bypass -File .\tests\Run-LiveAppLifecycle.ps1 -Reins
 
 That script:
 
+- verifies Samsung account is present and installs it from Microsoft Store if needed
 - removes Quick Share
 - reinstalls it from the Microsoft Store through the repo helper
 - verifies the package is present again
@@ -105,6 +110,7 @@ That script:
 ## Notes
 
 - if Quick Share is already installed, the installer keeps it and only applies the compatibility setup
+- if Samsung account is already installed, the installer keeps it and only reminds the user to sign in for account-based Quick Share features
 - if the machine does not have Intel wireless hardware, Quick Share may still fail even after the compatibility fix
 - the installer preserves the original registry values so uninstall can restore them later
 

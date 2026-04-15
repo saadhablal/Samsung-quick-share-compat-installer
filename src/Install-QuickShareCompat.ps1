@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipQuickShareInstall,
+    [switch]$SkipSamsungAccountInstall,
     [switch]$SkipLaunch,
     [switch]$PauseWhenFinished,
     [switch]$DryRun
@@ -15,7 +16,7 @@ try {
 
     if (-not $DryRun -and -not (Test-IsAdministrator)) {
         Write-Status 'Administrator rights are required. Requesting elevation...' -Level Warning
-        Restart-ElevatedScript -ScriptPath $PSCommandPath -OriginalArguments (Get-ReinvocationArgumentList -BoundParameters $PSBoundParameters)
+        Restart-ElevatedScript -ScriptPath (Get-ScriptInvocationPath -ScriptPath $PSCommandPath -InvocationInfo $MyInvocation) -OriginalArguments (Get-ReinvocationArgumentList -BoundParameters $PSBoundParameters)
     }
 
     $profile = Get-CompatibilityProfile
@@ -34,6 +35,19 @@ try {
     }
     else {
         Install-QuickShareFromStore | Out-Null
+    }
+
+    Write-Section 'Samsung Account'
+    if ($SkipSamsungAccountInstall) {
+        Write-Status 'Skipping Samsung account installation because -SkipSamsungAccountInstall was used.' -Level Warning
+    }
+    elseif ($DryRun) {
+        Write-Status 'Dry run: Samsung account would be installed from the Microsoft Store if missing.' -Level Info
+        Write-Status 'Dry run: users would still need to sign in manually for contact sharing and same-account transfers.' -Level Info
+    }
+    else {
+        Install-SamsungAccountFromStore | Out-Null
+        Write-Status 'Samsung account is available. Sign in inside Quick Share or the Samsung account app for contact sharing and same-account transfers.' -Level Info
     }
 
     Write-Section 'Compatibility Setup'

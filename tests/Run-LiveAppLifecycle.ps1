@@ -10,6 +10,16 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 Write-Section 'Live Quick Share App Lifecycle'
 
+Write-Status 'Ensuring the Samsung account app is present...' -Level Info
+Install-SamsungAccountFromStore | Out-Null
+
+$samsungAccountPackage = Get-SamsungAccountPackage
+if (-not $samsungAccountPackage) {
+    throw 'Samsung account is not installed.'
+}
+
+Write-Status "Samsung account package present: $($samsungAccountPackage.PackageFullName)" -Level Success
+
 if ($ReinstallQuickShare) {
     Write-Status 'Removing existing Quick Share package...' -Level Info
     Stop-QuickShareProcesses
@@ -36,4 +46,3 @@ if (-not $SkipLaunch) {
 }
 
 Write-Status 'Live app lifecycle passed.' -Level Success
-

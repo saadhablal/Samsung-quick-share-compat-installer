@@ -2,10 +2,20 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $repoRoot 'src\QuickShareCompat.Common.ps1')
 
 Describe 'QuickShareCompat.Common' {
+    Context 'package metadata' {
+        It 'returns the expected Microsoft Store package identifiers' {
+            Get-QuickSharePackageName | Should Be 'SAMSUNGELECTRONICSCoLtd.SamsungQuickShare'
+            Get-QuickShareStoreId | Should Be '9PCTGDFXVZLJ'
+            Get-SamsungAccountPackageName | Should Be 'SAMSUNGELECTRONICSCO.LTD.SamsungAccount'
+            Get-SamsungAccountStoreId | Should Be '9P98T77876KZ'
+        }
+    }
+
     Context 'Get-ReinvocationArgumentList' {
         It 'preserves named switches, scalars, and arrays for elevation relaunch' {
             $boundParameters = [ordered]@{
                 SkipLaunch = [System.Management.Automation.SwitchParameter]::Present
+                SkipSamsungAccountInstall = [System.Management.Automation.SwitchParameter]::Present
                 PauseWhenFinished = [System.Management.Automation.SwitchParameter]::Present
                 Mode = 'Install'
                 Tags = @('alpha', 'beta')
@@ -15,6 +25,7 @@ Describe 'QuickShareCompat.Common' {
 
             $arguments | Should Be @(
                 '-SkipLaunch',
+                '-SkipSamsungAccountInstall',
                 '-PauseWhenFinished',
                 '-Mode',
                 'Install',
@@ -22,6 +33,20 @@ Describe 'QuickShareCompat.Common' {
                 'alpha',
                 'beta'
             )
+        }
+    }
+
+    Context 'Get-ScriptInvocationPath' {
+        It 'falls back to invocation metadata when PSCommandPath is unavailable' {
+            $fakeInvocation = [pscustomobject]@{
+                MyCommand = [pscustomobject]@{
+                    Path = 'C:\Temp\Install-QuickShareCompat.ps1'
+                }
+            }
+
+            $path = Get-ScriptInvocationPath -ScriptPath $null -InvocationInfo $fakeInvocation
+
+            $path | Should Be 'C:\Temp\Install-QuickShareCompat.ps1'
         }
     }
 

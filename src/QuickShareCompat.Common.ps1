@@ -53,10 +53,57 @@ function Restart-ElevatedScript {
         [string[]]$OriginalArguments
     )
 
+    if ([string]::IsNullOrWhiteSpace($ScriptPath)) {
+        throw 'Could not determine the current script path for elevation relaunch.'
+    }
+
     $psExe = Join-Path $PSHOME 'powershell.exe'
-    $argumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath) + $OriginalArguments
+    $argumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath)
+    if ($OriginalArguments) {
+        $argumentList += @($OriginalArguments | Where-Object { $null -ne $_ })
+    }
     $process = Start-Process -FilePath $psExe -ArgumentList $argumentList -Verb RunAs -Wait -PassThru
     exit $process.ExitCode
+}
+
+function Get-ScriptInvocationPath {
+    param(
+        [AllowNull()]
+        [string]$ScriptPath,
+        [AllowNull()]
+        [object]$InvocationInfo
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ScriptPath)) {
+        return $ScriptPath
+    }
+
+    $command = $null
+    if ($InvocationInfo -and $InvocationInfo.PSObject.Properties['MyCommand']) {
+        $command = $InvocationInfo.MyCommand
+    }
+
+    if ($command) {
+        foreach ($propertyName in @('Path', 'Source', 'Definition')) {
+            if ($command.PSObject.Properties[$propertyName]) {
+                $candidate = [string]$command.$propertyName
+                if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+                    if ($propertyName -ne 'Definition' -or (Test-Path -LiteralPath $candidate)) {
+                        return $candidate
+                    }
+                }
+            }
+        }
+    }
+
+    if ($command -and $command.PSObject.Properties['ScriptBlock'] -and $command.ScriptBlock -and $command.ScriptBlock.PSObject.Properties['File']) {
+        $candidate = [string]$command.ScriptBlock.File
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            return $candidate
+        }
+    }
+
+    throw 'Could not determine the current script path.'
 }
 
 function Get-ReinvocationArgumentList {
@@ -110,6 +157,14 @@ function Get-QuickSharePackageName {
 
 function Get-QuickShareStoreId {
     return '9PCTGDFXVZLJ'
+}
+
+function Get-SamsungAccountPackageName {
+    return 'SAMSUNGELECTRONICSCO.LTD.SamsungAccount'
+}
+
+function Get-SamsungAccountStoreId {
+    return '9P98T77876KZ'
 }
 
 function Get-StartupTaskName {
@@ -427,8 +482,18 @@ function Remove-StartupTask {
     }
 }
 
+function Get-AppPackageByName {
+    param([string]$PackageName)
+
+    return Get-AppxPackage -Name $PackageName -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
 function Get-QuickSharePackage {
-    return Get-AppxPackage -Name (Get-QuickSharePackageName) -ErrorAction SilentlyContinue | Select-Object -First 1
+    return Get-AppPackageByName -PackageName (Get-QuickSharePackageName)
+}
+
+function Get-SamsungAccountPackage {
+    return Get-AppPackageByName -PackageName (Get-SamsungAccountPackageName)
 }
 
 function Ensure-WingetAvailable {
@@ -439,6 +504,50 @@ function Ensure-WingetAvailable {
     throw "winget is required to install Quick Share automatically. Install Microsoft App Installer and try again."
 }
 
+function Install-StoreAppPackage {
+    param(
+        [string]$PackageName,
+        [string]$StoreId,
+        [string]$DisplayName,
+        [int]$InstallAttempts = 2,
+        [int]$PollAttempts = 36,
+        [int]$PollIntervalSeconds = 5
+    )
+
+    $existing = Get-AppPackageByName -PackageName $PackageName
+    if ($existing) {
+        Write-Status "$DisplayName is already installed." -Level Success
+        return $existing
+    }
+
+    Ensure-WingetAvailable
+
+    for ($installAttempt = 1; $installAttempt -le $InstallAttempts; $installAttempt++) {
+        Write-Status "Installing $DisplayName from the Microsoft Store (attempt $installAttempt of $InstallAttempts)..." -Level Info
+
+        & winget.exe install --id $StoreId --source msstore --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
+        if ($LASTEXITCODE -ne 0) {
+            throw "winget could not install $DisplayName."
+        }
+
+        $package = $null
+        for ($pollAttempt = 0; $pollAttempt -lt $PollAttempts; $pollAttempt++) {
+            Start-Sleep -Seconds $PollIntervalSeconds
+            $package = Get-AppPackageByName -PackageName $PackageName
+            if ($package) {
+                Write-Status "$DisplayName installed successfully." -Level Success
+                return $package
+            }
+        }
+
+        if ($installAttempt -lt $InstallAttempts) {
+            Write-Status "$DisplayName did not appear yet. Retrying the Store install once more..." -Level Warning
+        }
+    }
+
+    throw "$DisplayName did not appear after installation."
+}
+
 function Install-QuickShareFromStore {
     param(
         [int]$InstallAttempts = 2,
@@ -446,38 +555,29 @@ function Install-QuickShareFromStore {
         [int]$PollIntervalSeconds = 5
     )
 
-    $existing = Get-QuickSharePackage
-    if ($existing) {
-        Write-Status "Quick Share is already installed." -Level Success
-        return $existing
-    }
+    return Install-StoreAppPackage `
+        -PackageName (Get-QuickSharePackageName) `
+        -StoreId (Get-QuickShareStoreId) `
+        -DisplayName 'Quick Share' `
+        -InstallAttempts $InstallAttempts `
+        -PollAttempts $PollAttempts `
+        -PollIntervalSeconds $PollIntervalSeconds
+}
 
-    Ensure-WingetAvailable
+function Install-SamsungAccountFromStore {
+    param(
+        [int]$InstallAttempts = 2,
+        [int]$PollAttempts = 36,
+        [int]$PollIntervalSeconds = 5
+    )
 
-    for ($installAttempt = 1; $installAttempt -le $InstallAttempts; $installAttempt++) {
-        Write-Status "Installing Quick Share from the Microsoft Store (attempt $installAttempt of $InstallAttempts)..." -Level Info
-
-        & winget.exe install --id (Get-QuickShareStoreId) --source msstore --accept-source-agreements --accept-package-agreements --silent --disable-interactivity
-        if ($LASTEXITCODE -ne 0) {
-            throw "winget could not install Quick Share."
-        }
-
-        $package = $null
-        for ($pollAttempt = 0; $pollAttempt -lt $PollAttempts; $pollAttempt++) {
-            Start-Sleep -Seconds $PollIntervalSeconds
-            $package = Get-QuickSharePackage
-            if ($package) {
-                Write-Status "Quick Share installed successfully." -Level Success
-                return $package
-            }
-        }
-
-        if ($installAttempt -lt $InstallAttempts) {
-            Write-Status 'Quick Share did not appear yet. Retrying the Store install once more...' -Level Warning
-        }
-    }
-
-    throw "Quick Share did not appear after installation."
+    return Install-StoreAppPackage `
+        -PackageName (Get-SamsungAccountPackageName) `
+        -StoreId (Get-SamsungAccountStoreId) `
+        -DisplayName 'Samsung account' `
+        -InstallAttempts $InstallAttempts `
+        -PollAttempts $PollAttempts `
+        -PollIntervalSeconds $PollIntervalSeconds
 }
 
 function Remove-QuickShareApp {

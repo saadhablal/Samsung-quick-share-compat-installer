@@ -14,7 +14,7 @@ try {
 
     if (-not $DryRun -and -not (Test-IsAdministrator)) {
         Write-Status 'Administrator rights are required. Requesting elevation...' -Level Warning
-        Restart-ElevatedScript -ScriptPath $PSCommandPath -OriginalArguments (Get-ReinvocationArgumentList -BoundParameters $PSBoundParameters)
+        Restart-ElevatedScript -ScriptPath (Get-ScriptInvocationPath -ScriptPath $PSCommandPath -InvocationInfo $MyInvocation) -OriginalArguments (Get-ReinvocationArgumentList -BoundParameters $PSBoundParameters)
     }
 
     $state = Get-StatePaths
